@@ -1,43 +1,12 @@
-#ifndef HTABLE_HTABLE_H
-#define HTABLE_HTABLE_H
+# htable
 
+A simple, reentrant hash table. Uses FNV-1a to hash keys and linking to resolve collions
 
-#include <pthread.h>
+## API 
 
+From htable.h ...
 
-#define FNV_OFFSET 14695981039346656037UL
-#define FNV_PRIME 1099511628211UL
-
-
-typedef struct htable_entry
-{
-  const char *key;
-  void *val;
-} htable_entry;
-
-typedef struct htable_node
-{
-  htable_entry entry;
-  struct htable_node *next;
-} htable_node;
-
-typedef struct htable
-{
-  size_t size; // Number of entries currently stored in the table
-
-  htable_node **buckets; // Main array. Each bucket is a linked list
-  size_t cap;            // Capacity of the array
-  pthread_rwlock_t mu;   // read/write mutex
-} htable;
-
-typedef struct htable_itr
-{
-  htable_node *node; // The current entry
-  htable *tab;         // Reference to the original table, used to lock and unlock read mutex
-  size_t next_bucket;  // Current bucket the iterator is pointing at
-} htable_itr;
-
-
+```c
 // htable
 
 // Create a new htable which can contain the specified number of elements.
@@ -66,8 +35,9 @@ void htable_remove(htable *self, const char *key);
 // Resizes the table to the specified size
 //
 // This will not remove elements, only change the size of the underlying array. Choosing a size smaller
-// than the number of elements currently in the table will result in lots of collisions, so use
-// htable_size to determine a good new size first
+// than the number of elements currently in the table will not fail, but will result in a greater number
+// of elements will collisions, so the size of the array should be used when resizing the array unless
+// other constraints are placed on the table
 void htable_resize(htable *self, size_t size);
 
 
@@ -90,5 +60,4 @@ htable_entry *htable_iterator_next(htable_itr *itr);
 
 // Close the iterator. Calling next after the iterator has been closed will always result in a null pointer
 void htable_iterator_destroy(htable_itr *itr);
-
-#endif //HTABLE_HTABLE_H
+```

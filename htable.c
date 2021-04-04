@@ -101,7 +101,7 @@ void htable_destroy(htable *self)
   htable_node *node = NULL;
 
   while ((node = htable_iterator_next_node(&itr)) != NULL) {
-    free(node);
+    htable_node_destroy(node);
   }
 
   htable_iterator_destroy(&itr);
@@ -230,18 +230,15 @@ void htable_remove(htable *self, const char *key)
 void htable_resize(htable *self, size_t size)
 {
   htable *resized = htable_create(size);
-
   htable_itr itr = htable_iterator_mut(self);
-
-  // Get iterator without locking mutex
   htable_node *node = NULL;
 
   // Iterate all entries
   while ((node = htable_iterator_next_node(&itr)) != NULL) {
     htable_set(resized, node->entry.key, node->entry.val);
 
-    // Free old node node
-    free(node);
+    // Free old node
+    htable_node_destroy(node);
   }
 
   // Free old bucket array
