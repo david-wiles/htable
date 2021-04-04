@@ -2,7 +2,6 @@
 #define HTABLE_HTABLE_H
 
 
-#include <stdlib.h>
 #include <pthread.h>
 
 
@@ -81,6 +80,11 @@ void htable_resize(htable *self, size_t size);
 // While the iterator is open, the table will retain a read lock on the elements to preserve consistency.
 // Therefore, the iterator should be closed once it is no longer in use.
 htable_itr htable_iterator(htable *self);
+
+
+// Create a new iterator which acquires a write lock on the table's resources. Work identical to the reading
+// iterator, except no other threads may access the htable while the iterator is open.
+htable_itr htable_iterator_mut(htable *self);
 
 // Increment the iterator and retrieve the next entry
 htable_entry *htable_iterator_next(htable_itr *itr);

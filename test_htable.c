@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "htable.h"
 
@@ -186,6 +187,16 @@ int main()
   htable_destroy(tab_small);
   htable_destroy(tab_large);
   printf("htable_destroy: pass\n");
+
+  // Free test resources
+  free(value_1);
+  free(value_2);
+  free(value_3);
+  free(value_4);
+  free(value_5);
+  free(value_6);
+  free(value_7);
+  free(value_8);
 
   return 0;
 }

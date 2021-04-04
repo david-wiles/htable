@@ -1,12 +1,12 @@
-CC := clang
+CC := gcc
 
 TESTSRC := test_htable.c
 SRC := htable.c
 
 OBJ := $(SRC:%=build/%.o)
 
-TESTFLAGS := -lpthread -fPIC  -std=c99 -ggdb -Wall -Wextra -Wshadow -fsanitize=undefined  -fno-omit-frame-pointer -fsanitize=address
-CFLAGS := -lpthread -fPIC -std=c99 -O3  -Wall -Wextra -Wshadow
+TESTFLAGS := -pthread -fPIC  -std=gnu99 -ggdb -Wall -Wextra -Wshadow -fsanitize=undefined  -fno-omit-frame-pointer -fsanitize=address -I/usr/include
+CFLAGS := -pthread -fPIC -std=gnu99 -O3  -Wall -Wextra -Wshadow -I/usr/include
 
 .PHONY: all
 all: clean htable.o test
@@ -24,7 +24,7 @@ test: debug/test
 
 debug/test: clean
 	mkdir -p $(dir $@)
-	$(CC) $(TESTFLAGS) $(TESTSRC) $(SRC) -o $@
+	$(CC) $(TESTFLAGS) $(SRC) $(TESTSRC) -o $@
 
 htable.o: bin/htable.o
 	cp $^ $@

@@ -1,8 +1,10 @@
 #include "htable.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-
+#include <stdint.h>
+#include <pthread.h>
 
 // helpers
 
@@ -38,6 +40,36 @@ static void htable_node_destroy(htable_node *self)
   free(self);
 }
 
+static htable_node *htable_iterator_next_node(htable_itr *itr)
+{
+  // Get the next element in the table. If there are no more elements, then null is returned
+  htable_node *node = NULL;
+
+  // Get entry linked to the current
+  if (itr->node != NULL && itr->node->next != NULL) {
+
+    node = itr->node->next;
+    itr->node = itr->node->next;
+
+  } else {
+
+    // Get entry from the next bucket
+    while (node == NULL && itr->next_bucket < itr->tab->cap) {
+
+      if (itr->tab->buckets[itr->next_bucket] != NULL) {
+        node = itr->tab->buckets[itr->next_bucket];
+      }
+
+      itr->next_bucket++;
+
+    }
+
+    // If there are no linked entries and no more buckets, the iterator is finished
+  }
+
+  return node;
+}
+
 
 // htable
 
@@ -62,12 +94,18 @@ htable *htable_create(size_t size)
   return self;
 }
 
-htable *htable_allocate(void *block, size_t size)
-{ return NULL; }
-
 void htable_destroy(htable *self)
 {
   // Free all elements of the table
+  htable_itr itr = htable_iterator_mut(self);
+  htable_node *node = NULL;
+
+  while ((node = htable_iterator_next_node(&itr)) != NULL) {
+    free(node);
+  }
+
+  htable_iterator_destroy(&itr);
+
   pthread_rwlock_destroy(&self->mu);
   free(self->buckets);
   free(self);
@@ -192,34 +230,32 @@ void htable_remove(htable *self, const char *key)
 void htable_resize(htable *self, size_t size)
 {
   htable *resized = htable_create(size);
-  htable *self_addr = self;
 
-  pthread_rwlock_wrlock(&self_addr->mu);
+  htable_itr itr = htable_iterator_mut(self);
 
   // Get iterator without locking mutex
-  htable_entry *entry = NULL;
-  htable_itr itr = (htable_itr) {
-          NULL,
-          self,
-          0
-  };
+  htable_node *node = NULL;
 
   // Iterate all entries
-  while ((entry = htable_iterator_next(&itr)) != NULL) {
-    htable_set(resized, entry->key, entry->val);
+  while ((node = htable_iterator_next_node(&itr)) != NULL) {
+    htable_set(resized, node->entry.key, node->entry.val);
+
+    // Free old node node
+    free(node);
   }
 
-  // Free old table
+  // Free old bucket array
   free(self->buckets);
-  pthread_rwlock_destroy(&self->mu);
 
   // Reassign resized to self
   self->buckets = resized->buckets;
   self->size = resized->size;
   self->cap = resized->cap;
-  self->mu = resized->mu;
 
-  pthread_rwlock_unlock(&self_addr->mu);
+  // Free temporary table
+  free(resized);
+
+  htable_iterator_destroy(&itr);
 }
 
 
@@ -229,6 +265,18 @@ htable_itr htable_iterator(htable *self)
 {
   // Lock the table for reading. htable_iterator_close must be called to unlock the mutex
   pthread_rwlock_rdlock(&self->mu);
+
+  return (htable_itr) {
+          NULL,
+          self,
+          0
+  };
+}
+
+htable_itr htable_iterator_mut(htable *self)
+{
+  // Lock the table for writing. htable_iterator_close must be called to unlock the mutex
+  pthread_rwlock_wrlock(&self->mu);
 
   return (htable_itr) {
           NULL,
