@@ -60,8 +60,10 @@ void htable_set(htable *self, const char *key, void *val);
 // Get the value stored with 'key'. If the key does not exist, then a null pointer is returned.
 void *htable_get(htable *self, const char *key);
 
-// Remove the value stored with 'key', if it exists. If the value does exist, then it will be freed.
-void htable_remove(htable *self, const char *key);
+// Remove the value stored with 'key', if it exists. If the value does exist, then it will be freed
+// and the value stored will be returned. Since the entry is owned by the table, removing the entry
+// is the proper way to regain ownership of the value
+void *htable_remove(htable *self, const char *key);
 
 // Resizes the table to the specified size
 //

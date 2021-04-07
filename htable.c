@@ -176,10 +176,11 @@ void *htable_get(htable *self, const char *key)
   return node == NULL ? NULL : node->entry.val;
 }
 
-void htable_remove(htable *self, const char *key)
+void *htable_remove(htable *self, const char *key)
 {
   uint64_t hash = hash_fn(key);
   size_t bucket = (size_t) (hash & self->cap - 1);
+  void *value = NULL;
 
   pthread_rwlock_wrlock(&self->mu);
 
@@ -190,6 +191,7 @@ void htable_remove(htable *self, const char *key)
     if (strcmp(node->entry.key, key) == 0) {
 
       htable_node *next = node->next;
+      value = node->entry.val;
       htable_node_destroy(node);
       self->size--;
 
@@ -216,6 +218,7 @@ void htable_remove(htable *self, const char *key)
       // If entry is not null, reconnect last to next and free the entry
       if (node != NULL) {
         last->next = node->next;
+        value = node->entry.val;
         htable_node_destroy(node);
         self->size--;
       }
@@ -225,6 +228,7 @@ void htable_remove(htable *self, const char *key)
   }
 
   pthread_rwlock_unlock(&self->mu);
+  return value;
 }
 
 void htable_resize(htable *self, size_t size)
