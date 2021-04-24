@@ -20,24 +20,24 @@ static uint64_t hash_fn(const char *key)
   return hash;
 }
 
-static htable_node *htable_node_create(const char *key, void *val)
+static htable_node *htable_node_create(htable *self, const char *key, void *val)
 {
-  htable_node *self;
+  htable_node *node;
 
-  if ((self = malloc(sizeof(htable_node))) == NULL) {
+  if ((node = self->alloc(1, sizeof(htable_node))) == NULL) {
     return NULL;
   }
 
-  self->entry.key = key;
-  self->entry.val = val;
-  self->next = NULL;
+  node->entry.key = key;
+  node->entry.val = val;
+  node->next = NULL;
 
-  return self;
+  return node;
 }
 
-static void htable_node_destroy(htable_node *self)
+static void htable_node_destroy(htable *self, htable_node *node)
 {
-  free(self);
+  self->dealloc(node);
 }
 
 static htable_node *htable_iterator_next_node(htable_itr *itr)
@@ -75,17 +75,24 @@ static htable_node *htable_iterator_next_node(htable_itr *itr)
 
 htable *htable_create(size_t size)
 {
+  return htable_create_with_allocator(calloc, free, size);
+}
+
+htable *htable_create_with_allocator(void *(*alloc)(size_t, size_t), void (*dealloc)(void *), size_t size)
+{
   htable *self;
 
-  if ((self = calloc(1, sizeof(htable))) == NULL) {
+  if ((self = alloc(1, sizeof(htable))) == NULL) {
     return NULL;
   }
 
-  if ((self->buckets = calloc(size, sizeof(htable_node *))) == NULL) {
-    free(self);
+  if ((self->buckets = alloc(size, sizeof(htable_node *))) == NULL) {
+    dealloc(self);
     return NULL;
   }
 
+  self->alloc = alloc;
+  self->dealloc = dealloc;
   self->size = 0;
   self->cap = size;
 
@@ -101,14 +108,14 @@ void htable_destroy(htable *self)
   htable_node *node = NULL;
 
   while ((node = htable_iterator_next_node(&itr)) != NULL) {
-    htable_node_destroy(node);
+    htable_node_destroy(self, node);
   }
 
   htable_iterator_destroy(&itr);
 
   pthread_rwlock_destroy(&self->mu);
-  free(self->buckets);
-  free(self);
+  self->dealloc(self->buckets);
+  self->dealloc(self);
 }
 
 int htable_size(htable *self)
@@ -128,7 +135,7 @@ void htable_set(htable *self, const char *key, void *val)
   if (node == NULL) {
 
     // Create new entry in bucket
-    self->buckets[bucket] = htable_node_create(key, val);;
+    self->buckets[bucket] = htable_node_create(self, key, val);;
     self->size++;
 
   } else {
@@ -149,7 +156,7 @@ void htable_set(htable *self, const char *key, void *val)
       if (strcmp(node->entry.key, key) == 0) {
         node->entry.val = val;
       } else {
-        node->next = htable_node_create(key, val);;
+        node->next = htable_node_create(self, key, val);;
         self->size++;
       }
     }
@@ -192,7 +199,7 @@ void *htable_remove(htable *self, const char *key)
 
       htable_node *next = node->next;
       value = node->entry.val;
-      htable_node_destroy(node);
+      htable_node_destroy(self, node);
       self->size--;
 
       // If there is another element in the bucket, move it up
@@ -219,7 +226,7 @@ void *htable_remove(htable *self, const char *key)
       if (node != NULL) {
         last->next = node->next;
         value = node->entry.val;
-        htable_node_destroy(node);
+        htable_node_destroy(self, node);
         self->size--;
       }
 
@@ -233,7 +240,7 @@ void *htable_remove(htable *self, const char *key)
 
 void htable_resize(htable *self, size_t size)
 {
-  htable *resized = htable_create(size);
+  htable *resized = htable_create_with_allocator(self->alloc, self->dealloc, size);
   htable_itr itr = htable_iterator_mut(self);
   htable_node *node = NULL;
 
@@ -242,11 +249,11 @@ void htable_resize(htable *self, size_t size)
     htable_set(resized, node->entry.key, node->entry.val);
 
     // Free old node
-    htable_node_destroy(node);
+    htable_node_destroy(self, node);
   }
 
   // Free old bucket array
-  free(self->buckets);
+  self->dealloc(self->buckets);
 
   // Reassign resized to self
   self->buckets = resized->buckets;
@@ -254,7 +261,7 @@ void htable_resize(htable *self, size_t size)
   self->cap = resized->cap;
 
   // Free temporary table
-  free(resized);
+  self->dealloc(resized);
 
   htable_iterator_destroy(&itr);
 }

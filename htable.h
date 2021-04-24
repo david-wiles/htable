@@ -28,6 +28,11 @@ typedef struct htable
   htable_node **buckets; // Main array. Each bucket is a linked list
   size_t cap;            // Capacity of the array
   pthread_rwlock_t mu;   // read/write mutex
+
+  // Functions for allocation and deallocation. If not defined in create_with_allocator,
+  // it will default to malloc and free
+  void *(*alloc)(size_t, size_t);
+  void (*dealloc)(void *);
 } htable;
 
 typedef struct htable_itr
@@ -46,6 +51,10 @@ typedef struct htable_itr
 // collision resolution, but the underlying table itself will not be resized automatically.
 // Resizing must be done using htable_resize(), passing in the desired new size of the table
 htable *htable_create(size_t size);
+
+// Create a new htable with the given allocator and deallocator functions. If defined, then these
+// functions will be used for all memory operations
+htable *htable_create_with_allocator(void *(*alloc)(size_t, size_t), void (*dealloc)(void *), size_t size);
 
 // Destroy the htable and free all resources
 // This will also attempt to free all values stored in the table
@@ -81,7 +90,6 @@ void htable_resize(htable *self, size_t size);
 // While the iterator is open, the table will retain a read lock on the elements to preserve consistency.
 // Therefore, the iterator should be closed once it is no longer in use.
 htable_itr htable_iterator(htable *self);
-
 
 // Create a new iterator which acquires a write lock on the table's resources. Work identical to the reading
 // iterator, except no other threads may access the htable while the iterator is open.
